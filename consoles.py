@@ -26,6 +26,7 @@ Bob Lantz, April 2010
 """
 import time
 import re
+import commands
 
 from Tkinter import Frame, Button, Label, Text, Scrollbar, Canvas, Wm, READABLE
 
@@ -37,9 +38,15 @@ from mininet.node import Node
 from mininet.topo import Topo
 from mininet.net import Mininet
 
-servers = 2
-nathost = 1
-clients = 4
+servers = 0
+nathost = 0
+clients = 6
+
+start = 1
+number = 0
+watch = 0
+local_program_path = "/usr/local/sbin"
+
 global start_how_many
 start_how_many = 1
 
@@ -65,8 +72,8 @@ class MyTopo(Topo):
             mac = '0' * (12 - len(mac)) + mac
             for j in range(5, 0, -1):
                 mac = mac[0: j * 2] + ':' + mac[j * 2: len(mac)]
-            exec ("br500_" + str(i) + "= self.addHost('br500_" + str(i) + "', mac='" + mac + "')")
-            exec ("self.addLink(s1" + ", br500_" + str(i) + ")")
+            exec ("vland_" + str(i) + "= self.addHost('vland_" + str(i) + "', mac='" + mac + "')")
+            exec ("self.addLink(s1" + ", vland_" + str(i) + ")")
 
 
 topos = {'mytopo': (lambda: MyTopo())}
@@ -342,7 +349,7 @@ class ConsoleApp(Frame):
         # (servers + clients) * 20
 
         canvas = self.canvas = Canvas(self, width=1600, height=800,
-                                      scrollregion=(0, 0, 0, ((servers + nathost + clients + 8) // 4) * 264))
+                                      scrollregion=(0, 0, 0, ((servers + nathost + clients + 200) // 4) * 280))
 
         # cframe = self.cframe = Frame(canvas, width=1600, height=((servers + nathost + clients + 3) // 4) * 264)
         cframe = self.cframe = Frame(canvas)
@@ -351,7 +358,7 @@ class ConsoleApp(Frame):
             frame, consoles = self.createConsoles(
                 cframe, nodes, width, titles[name])
             self.consoles[name] = Object(frame=frame, consoles=consoles)
-        canvas.create_window((800, ((servers + nathost + clients + 12) // 4) * 132), window=cframe)
+        canvas.create_window((800, ((servers + nathost + clients + 100) // 4) * 132), window=cframe)
         self.selected = None
         self.select('hosts')
 
@@ -431,20 +438,20 @@ class ConsoleApp(Frame):
         "Create and return a menu (really button) bar."
         f = Frame(self)
         buttons = [
-            ('Hosts', lambda: self.select('hosts')),
-            ('Switches', lambda: self.select('switches')),
-            ('Controllers', lambda: self.select('controllers')),
-            ('Graph', lambda: self.select('graph')),
-            ('iptablse', self.iptablse),
-            ('mqtt_ctrl', self.mqtt_ctrl),
-            ('vppn_ctrl', self.vppn_ctrl),
-            ('Debug', self.debug),
-            ('Stop_tinc', self.stoptinc),
-            ('Ping', self.ping),
-            ('iperf_serv', self.iperf_serv),
-            ('iperf_cent', self.iperf_cent),
-            ('iperf_stop', self.iperf_stop),
-            ('Interrupt', self.stop),
+            ('Disable_watch', self.disable_watch),
+            ('Enable_watch', self.enable_watch),
+            ('Debug_10', self.debug_10),
+            ('Debug_20', self.debug_20),
+            ('Debug_40', self.debug_40),
+            ('Debug_60', self.debug_60),
+            ('Debug_80', self.debug_80),
+            ('Debug_100', self.debug_100),
+            ('Debug_150', self.debug_150),
+            ('Debug_all', self.debug_all),
+            ('Add_10', self.debug_Add_10),
+            ('Reduce_10', self.debug_reduce_10),
+            ('Stop_vland', self.stop_vland),
+            ('Stop_watch', self.stop_watch),
             ('Clear', self.clear),
             ('Quit', self.quit)
         ]
@@ -458,6 +465,8 @@ class ConsoleApp(Frame):
         "Clear selection."
         for console in self.selected.consoles:
             console.clear()
+        os.system('rm /etc/vlan_test/*/vlan.log /etc/vlan_test/*/crash.*')
+
 
     def waiting(self, consoles=None):
         "Are any of our hosts waiting for output?"
@@ -468,155 +477,280 @@ class ConsoleApp(Frame):
                 return True
         return False
 
-    def mqtt_ctrl(self):
+    def stop_vland(self):
+        os.system('killall vlan vland; killall -9 vlan vland')
+	global number
+	number = 0
+	s = 'total: ' + str(number)
+	print(s)
+
+    def stop_watch(self):
+        os.system('killall vlan; killall -9 vlan')
+
+    def disable_watch(self):
+	global watch
+	watch = 0
+	print('disabled watch')
+
+    def enable_watch(self):
+	global watch
+	watch = 1
+	print('enabled watch')
+
+    def debug_10(self):
         consoles = self.consoles['hosts'].consoles
         if self.waiting(consoles):
             return
-        i = 0
+	global number
+        i = start - 1
         for console in consoles:
             i += 1
-            if i <= servers + clients:
-                console.sendCmd('mqtt-client -c ' + str(i - 1) + ' -n -f -u routertestuser -p 123456 &')
+	    if i > number and i <= 10 :
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
 
-    def vppn_ctrl(self):
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else : 
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+	s = 'total: ' + str(number)
+	print(s)
+
+
+
+    def debug_20(self):
         consoles = self.consoles['hosts'].consoles
         if self.waiting(consoles):
             return
-        i = 0
+	global number
+        i = start - 1
         for console in consoles:
             i += 1
-            if i <= servers + clients:
-                console.sendCmd('vppnctrl -t ' + str(i - 1) + ' run')
+	    if i > number and i <= 20:
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
 
-    def debug(self):
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+
+	s = 'total: ' + str(number)
+	print(s)
+
+
+
+    def debug_40(self):
         consoles = self.consoles['hosts'].consoles
         if self.waiting(consoles):
             return
-        i = 0
+	global number
+        i = start - 1
         for console in consoles:
             i += 1
+	    if i > number and i <= 40:
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
 
-            #if i <= servers + clients:
-            #global start_how_many
-            #if start_how_many <= i < start_how_many + 10:
-	    if i > 1 :
-                console.sendCmd('sudo /etc/tinc/' + str(i) + '/start &')
-		#sudo tincd -c /etc/tinc/' + str(i) + ' --pidfile=/etc/tinc/' + str(i) + "/tinc.pid -D -d 1 &")
-        #start_how_many = start_how_many + 10
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
 
-    def stoptinc(self):
-        os.system('killall tincd')
-        #global start_how_many
-        #if start_how_many > 10:
-        #    for i in range(start_how_many - 10, start_how_many + 1):
-        #        os.system('sudo /root/tinc/tinc -c /etc/tinc/' + str(i) + ' --pidfile=/etc/tinc/' + str(i) + "/tinc.pid stop")
-        #    start_how_many = start_how_many - 10
+	s = 'total: ' + str(number)
+	print(s)
 
-    def iptablse(self):
-        if clients > 1:
-            consoles = self.consoles['hosts'].consoles
-            if self.waiting(consoles):
-                return
-            i = 0
-            for console in consoles:
-                i += 1
-                if servers < i <= servers + clients:
-                    if i == servers:
-                        console.sendCmd('iptables -A OUTPUT -m iprange --dst-range 10.0.0.' + str(
-                            servers + 2) + '-10.0.0.' + str(servers + clients) + ' -j DROP')
-                    elif i == servers + clients:
-                        console.sendCmd('iptables -A OUTPUT -m iprange --dst-range 10.0.0.' + str(
-                            servers + 1) + '-10.0.0.' + str(servers + clients - 1) + ' -j DROP')
-                    else:
-                        console.sendCmd('iptables -A OUTPUT -m iprange --dst-range 10.0.0.' + str(
-                            servers + 1) + '-10.0.0.' + str(i) + ' -j DROP')
-                        time.sleep(0.001)
-                        console.sendCmd(
-                            'iptables -A OUTPUT -m iprange --dst-range 10.0.0.' + str(i + 1) + '-10.0.0.' + str(
-                                servers + clients) + ' -j DROP')
 
-    def ping(self):
-        "Tell each host to ping the next one."
+
+    def debug_60(self):
         consoles = self.consoles['hosts'].consoles
         if self.waiting(consoles):
             return
-        count = len(consoles)
-
-        i = 0
+	global number
+        i = start - 1
         for console in consoles:
             i += 1
-            if servers < i <= servers + clients:
-                if i == count - nathost:
-                    j = servers
-                else:
-                    j = i
-                ip = '10.1.0.' + str(j + 1)
-                console.sendCmd('ping ' + ip)
+	    if i > number and i <= 60:
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
 
-    def iperf_serv(self):
-        "Tell each host to iperf to the next one."
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+
+	s = 'total: ' + str(number)
+	print(s)
+
+
+
+    def debug_80(self):
         consoles = self.consoles['hosts'].consoles
         if self.waiting(consoles):
             return
-        count = len(consoles)
-        self.setOutputHook(self.updateGraph)
-        # for console in consoles:
-        # Sometimes iperf -sD doesn't return,
-        # so we run it in the background instead
-        # console.handleReturn()
-        i = 1
+	global number
+        i = start - 1
         for console in consoles:
             i += 1
-            if servers < i <= servers + clients:
-                if i == count - nathost:
-                    j = servers
-                else:
-                    j = i
-                ip = '10.1.0.' + str(j)
-                console.sendCmd('iperf -t 99999 -i 1 -s ' + ip + ' &')
+	    if i > number and i <= 80:
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
 
-    def iperf_cent(self):
-        "Tell each host to iperf to the next one."
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+
+	s = 'total: ' + str(number)
+	print(s)
+
+
+
+    def debug_100(self):
         consoles = self.consoles['hosts'].consoles
         if self.waiting(consoles):
             return
-        count = len(consoles)
-        self.setOutputHook(self.updateGraph)
-        # for console in consoles:
-        # Sometimes iperf -sD doesn't return,
-        # so we run it in the background instead
-        # console.handleReturn()
-
-        i = 0
+	global number
+        i = start - 1
         for console in consoles:
             i += 1
-            if servers < i <= servers + clients:
-                if i == count - nathost:
-                    j = servers
-                else:
-                    j = i
-                ip = '10.1.0.' + str(j + 1)
-                console.sendCmd('iperf -t 99999 -i 1 -c ' + ip)
+	    if i > number and i <= 100:
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
 
-    def iperf_stop(self, wait=True):
-        quietRun('killall -9 iperf')
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
 
-    def stop(self, wait=True):
-        "Interrupt all hosts."
+	s = 'total: ' + str(number)
+	print(s)
+
+
+
+    def debug_150(self):
         consoles = self.consoles['hosts'].consoles
+        if self.waiting(consoles):
+            return
+	global number
+        i = start - 1
         for console in consoles:
-            console.handleInt()
-        if wait:
-            for console in consoles:
-                console.waitOutput()
-        self.setOutputHook(None)
-        # Shut down any iperfs that might still be running
-        quietRun('killall -9 iperf')
+            i += 1
+	    if i > number and i <= 150 :
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
 
-    def quit(self):
-        "Stop everything and quit."
-        self.stop(wait=False)
-        Frame.quit(self)
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+
+	s = 'total: ' + str(number)
+	print(s)
+
+
+
+    def debug_all(self):
+        consoles = self.consoles['hosts'].consoles
+        if self.waiting(consoles):
+            return
+	global number
+        i = start - 1
+        for console in consoles:
+            i += 1
+	    if i >= number :
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
+
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+
+	s = 'total: ' + str(number)
+	print(s)
+
+    def debug_Add_10(self):
+        consoles = self.consoles['hosts'].consoles
+        if self.waiting(consoles):
+            return
+	global number
+	end = number + 10
+        i = start - 1
+        for console in consoles:
+            i += 1
+	    if i > number and i <= end:
+		number = i
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
+		str_i='/etc/vlan_test/' + str(i)
+		global watch
+		if watch > 0 :
+	                console.sendCmd('nohup ' + local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid watch --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+		else :
+	                console.sendCmd('nohup ' + local_program_path + '/vland -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid --logfile=' + str_i + '/vlan.log -d 1 > /dev/null  2>&1 &')
+
+	s = 'total: ' + str(number)
+	print(s)
+
+
+    def debug_reduce_10(self):
+        consoles = self.consoles['hosts'].consoles
+        if self.waiting(consoles) or number <= 0 :
+            print('Already is 0')
+            return
+	global number
+	if number >= 10 :
+		end = number - 10
+	else :
+		end = 0
+        i = start - 1
+        for console in consoles:
+            i += 1
+	    if i > end and i <= number:
+		str_i='/etc/vlan_test/' + str(i)
+		s = 'i: ' + str(i) + ' ............'
+		print(s)
+		result = commands.getoutput('ps -ef | grep vlan | grep -v vland | grep -v grep | grep \" /etc/vlan_test/' + str(i) + '\ " | awk \'{print $2;}\'')
+		for str_ in result.split() :
+#			print(str_)
+			console.sendCmd('kill ' + str_)
+			console.sendCmd('kill -9 ' + str_)
+
+		result = commands.getoutput('ps -ef | grep vland | grep -v grep | grep \" /etc/vlan_test/' + str(i) + '\ " | awk \'{print $2;}\'')
+		for str_ in result.split() :
+#			print(str_)
+			commands.getoutput(local_program_path + '/vlan -c ' + str_i + ' --pidfile=' + str_i + '/vlan.pid stop; kill ' + str_ + '; kill -9 ' + str_)
+
+	number = end
+	s = 'total: ' + str(number)
+	print(s)
+
+
 
 
 # Make it easier to construct and assign objects
